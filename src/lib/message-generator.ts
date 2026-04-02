@@ -1,3 +1,5 @@
+import { isBefore, isToday, parseISO } from "date-fns";
+
 import type { ApprovalDraft, Lead } from "@/lib/types";
 
 const introByType: Record<Lead["businessType"], string[]> = {
@@ -115,10 +117,17 @@ const closeByType: Record<Lead["businessType"], string[]> = {
 };
 
 export function buildOutboundDrafts(leads: Lead[]) {
-  return leads
+  const firstContactDrafts = leads
     .filter((lead) => lead.status === "new" && lead.leadType === "cold")
     .slice(0, 20)
     .map(toOutboundDraft);
+
+  const followUpDrafts = leads
+    .filter(shouldGenerateFollowUpDraft)
+    .slice(0, 20)
+    .map(toFollowUpDraft);
+
+  return [...firstContactDrafts, ...followUpDrafts];
 }
 
 function toOutboundDraft(lead: Lead): ApprovalDraft {
@@ -134,12 +143,45 @@ function toOutboundDraft(lead: Lead): ApprovalDraft {
   };
 }
 
+function toFollowUpDraft(lead: Lead): ApprovalDraft {
+  const outboundCount = lead.conversationHistory.filter((event) => event.direction === "outbound").length;
+  const cadenceType = lead.leadType === "warm" || lead.status === "warm" || lead.status === "ready_to_close" ? "warm" : "cold";
+  const sequenceNumber = outboundCount + 1;
+
+  return {
+    id: `followup-${lead.id}-${sequenceNumber}`,
+    type: "followup",
+    leadId: lead.id,
+    leadName: lead.businessName,
+    city: lead.city,
+    businessType: lead.businessType.replaceAll("_", " "),
+    reason: buildFollowUpReason(lead, outboundCount),
+    message: buildFollowUpMessage(lead, outboundCount),
+    cadenceType,
+    nextStatus: cadenceType === "warm" ? "warm" : "followup_due",
+    nextFollowUpDays: cadenceType === "warm" ? 2 : outboundCount >= 2 ? 5 : 4,
+    sequenceNumber
+  };
+}
+
 function buildReason(lead: Lead) {
   if (lead.businessType === "longevity_clinic" || lead.businessType === "biohacking_centre") {
     return "Fresh high-fit lead in a priority segment for HaloX and Antarctica positioning.";
   }
 
   return "Fresh lead with no outreach yet. Ready for first-contact approval.";
+}
+
+function buildFollowUpReason(lead: Lead, outboundCount: number) {
+  if (lead.leadType === "warm" || lead.status === "warm" || lead.status === "ready_to_close") {
+    return "Warm lead due for a light check-in so the conversation keeps moving without feeling pushy.";
+  }
+
+  if (outboundCount <= 1) {
+    return "Initial outreach went out and this lead is now due for the first follow-up.";
+  }
+
+  return "This lead has already had an opener and one nudge, so the next follow-up should stay light and low-pressure.";
 }
 
 function buildOpeningMessage(lead: Lead) {
@@ -153,12 +195,39 @@ function buildOpeningMessage(lead: Lead) {
   return `${greeting} ${intro}\n\n${body}${cityHint}${noteHint}\n\n${close}`;
 }
 
+function buildFollowUpMessage(lead: Lead, outboundCount: number) {
+  const greeting = buildGreeting(lead);
+
+  if (lead.leadType === "warm" || lead.status === "warm" || lead.status === "ready_to_close") {
+    return `${greeting}\n\nJust checking back in since we last spoke. Happy to answer anything else around setup, pricing, shipping, or which equipment would make the most sense for your space.\n\nIf useful, I can also point you toward the most relevant demo direction for your team.`;
+  }
+
+  if (outboundCount <= 1) {
+    return `${greeting}\n\nJust following up on my earlier message in case it got buried. We work with operators looking at cryotherapy equipment for recovery, premium positioning, and stronger client retention.\n\nHappy to send a short overview if useful.`;
+  }
+
+  return `${greeting}\n\nJust a light follow-up from my side. If cryotherapy equipment is something you're considering this year, happy to share the most relevant product direction and a quick demo link.\n\nIf not a priority right now, no worries at all.`;
+}
+
 function buildGreeting(lead: Lead) {
   if (lead.contactName && !lead.contactName.toLowerCase().includes("team")) {
     return `Hi ${lead.contactName},`;
   }
 
   return `Hi ${lead.businessName} team,`;
+}
+
+function shouldGenerateFollowUpDraft(lead: Lead) {
+  if (!lead.followUpDueAt) {
+    return false;
+  }
+
+  if (!(lead.status === "contacted" || lead.status === "followup_due" || lead.status === "warm" || lead.status === "ready_to_close")) {
+    return false;
+  }
+
+  const dueDate = parseISO(lead.followUpDueAt);
+  return isToday(dueDate) || isBefore(dueDate, new Date());
 }
 
 function buildNoteHint(notes: string) {

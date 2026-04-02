@@ -663,7 +663,7 @@ button {
   color: var(--accent-strong);
 }
 
-.approval-reply {
+.approval-followup {
   background: rgba(201, 109, 50, 0.14);
   color: #8a471f;
 }

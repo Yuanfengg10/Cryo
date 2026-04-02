@@ -18,7 +18,12 @@ const replySchema = z.object({
 
 const approvalSchema = z.object({
   leadId: z.string().min(1),
-  message: z.string().min(5)
+  message: z.string().min(5),
+  draftType: z.enum(["outbound", "followup"]).default("outbound"),
+  cadenceType: z.enum(["cold", "warm"]).optional(),
+  nextStatus: z.enum(["contacted", "followup_due", "warm", "ready_to_close"]).optional(),
+  nextFollowUpDays: z.coerce.number().int().positive().optional(),
+  sequenceNumber: z.coerce.number().int().positive().optional()
 });
 
 export type ReplyActionState = {
@@ -258,7 +263,12 @@ export async function approveOutboundDraftAction(
 ): Promise<ApprovalActionState> {
   const result = approvalSchema.safeParse({
     leadId: formData.get("leadId"),
-    message: formData.get("message")
+    message: formData.get("message"),
+    draftType: formData.get("draftType") ?? "outbound",
+    cadenceType: formData.get("cadenceType") || undefined,
+    nextStatus: formData.get("nextStatus") || undefined,
+    nextFollowUpDays: formData.get("nextFollowUpDays") || undefined,
+    sequenceNumber: formData.get("sequenceNumber") || undefined
   });
 
   if (!result.success) {
@@ -276,9 +286,23 @@ export async function approveOutboundDraftAction(
   }
 
   const supabase = createSupabaseServerClient();
-  const { leadId, message } = result.data;
+  const { leadId, message, draftType, cadenceType, nextFollowUpDays, nextStatus, sequenceNumber } = result.data;
   const now = new Date().toISOString();
-  const followUpDueAt = addDays(new Date(), 3).toISOString();
+  const followUpDueAt = addDays(new Date(), draftType === "outbound" ? 3 : nextFollowUpDays ?? 4).toISOString();
+  const leadUpdate: {
+    status: "contacted" | "followup_due" | "warm" | "ready_to_close";
+    last_contacted_at: string;
+    follow_up_due_at: string;
+    first_contacted_at?: string;
+  } = {
+    status: draftType === "outbound" ? "contacted" : nextStatus ?? "followup_due",
+    last_contacted_at: now,
+    follow_up_due_at: followUpDueAt
+  };
+
+  if (draftType === "outbound") {
+    leadUpdate.first_contacted_at = now;
+  }
 
   const { error: conversationError } = await supabase.from("conversation_events").insert({
     lead_id: leadId,
@@ -297,12 +321,7 @@ export async function approveOutboundDraftAction(
 
   const { error: leadError } = await supabase
     .from("leads")
-    .update({
-      status: "contacted",
-      first_contacted_at: now,
-      last_contacted_at: now,
-      follow_up_due_at: followUpDueAt
-    })
+    .update(leadUpdate)
     .eq("id", leadId);
 
   if (leadError) {
@@ -317,16 +336,38 @@ export async function approveOutboundDraftAction(
     activity_type: "message_sent",
     metadata: {
       channel: "whatsapp",
+      draft_type: draftType,
       follow_up_due_at: followUpDueAt
     }
   });
 
+  if (draftType === "followup") {
+    await supabase
+      .from("follow_up_tasks")
+      .update({
+        status: "completed",
+        completed_at: now
+      })
+      .eq("lead_id", leadId)
+      .eq("status", "pending");
+  }
+
   await supabase.from("follow_up_tasks").insert({
     lead_id: leadId,
-    sequence_number: 1,
-    cadence_type: "cold",
+    sequence_number: sequenceNumber ?? (draftType === "outbound" ? 1 : 2),
+    cadence_type: cadenceType ?? "cold",
     due_at: followUpDueAt,
     status: "pending"
+  });
+
+  await supabase.from("activity_log").insert({
+    lead_id: leadId,
+    activity_type: "follow_up_scheduled",
+    metadata: {
+      draft_type: draftType,
+      cadence_type: cadenceType ?? "cold",
+      due_at: followUpDueAt
+    }
   });
 
   revalidatePath("/");
@@ -334,7 +375,10 @@ export async function approveOutboundDraftAction(
 
   return {
     success: true,
-    message: "Draft approved. Lead moved to contacted and follow-up scheduled."
+    message:
+      draftType === "outbound"
+        ? "Draft approved. Lead moved to contacted and follow-up scheduled."
+        : "Follow-up approved and the next follow-up date was scheduled."
   };
 }
 

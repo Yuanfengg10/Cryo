@@ -18,23 +18,29 @@ export function ApprovalCard({ draft }: ApprovalCardProps) {
   const [state, formAction, isPending] = useActionState(approveOutboundDraftAction, initialState);
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState(draft.message);
+  const typeLabel = draft.type === "outbound" ? "outbound" : "follow-up";
 
   return (
     <article className="approval-card">
       <div className="approval-header">
         <div>
-          <p className="eyebrow">{draft.type === "outbound" ? "Outbound draft" : "Reply draft"}</p>
+          <p className="eyebrow">{draft.type === "outbound" ? "Outbound draft" : "Follow-up draft"}</p>
           <h3>{draft.leadName}</h3>
           <p className="muted">
             {draft.city} · {draft.businessType}
           </p>
         </div>
-        <span className={`approval-type approval-${draft.type}`}>{draft.type}</span>
+        <span className={`approval-type approval-${draft.type}`}>{typeLabel}</span>
       </div>
 
       <p className="approval-reason">{draft.reason}</p>
       <form action={formAction}>
         <input name="leadId" type="hidden" value={draft.leadId} />
+        <input name="draftType" type="hidden" value={draft.type} />
+        <input name="cadenceType" type="hidden" value={draft.cadenceType ?? ""} />
+        <input name="nextStatus" type="hidden" value={draft.nextStatus ?? ""} />
+        <input name="nextFollowUpDays" type="hidden" value={String(draft.nextFollowUpDays ?? "")} />
+        <input name="sequenceNumber" type="hidden" value={String(draft.sequenceNumber ?? "")} />
 
         <label className="approval-editor">
           <span className="eyebrow">Message</span>

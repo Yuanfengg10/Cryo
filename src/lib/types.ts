@@ -97,13 +97,17 @@ export type AutomationStatus = {
 
 export type ApprovalDraft = {
   id: string;
-  type: "outbound" | "reply";
+  type: "outbound" | "followup";
   leadId: string;
   leadName: string;
   city: string;
   businessType: string;
   reason: string;
   message: string;
+  cadenceType?: "cold" | "warm";
+  nextStatus?: LeadStatus;
+  nextFollowUpDays?: number;
+  sequenceNumber?: number;
 };
 
 export type SearchPlay = {
