@@ -1,0 +1,40 @@
+{
+  "name": "cryo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WhatsApp-first solo sales command centre for CryoLeads",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuanfengg10/Cryo.git"
+  },
+  "keywords": [],
+  "author": "Yuan",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Yuanfengg10/Cryo/issues"
+  },
+  "homepage": "https://github.com/Yuanfengg10/Cryo#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.7.0",
+    "next": "^16.2.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.1",
+    "typescript": "^6.0.2"
+  }
+}
