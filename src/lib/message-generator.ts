@@ -173,12 +173,19 @@ function buildReason(lead: Lead) {
 }
 
 function buildFollowUpReason(lead: Lead, outboundCount: number) {
+  const lastInbound = getLatestConversationByDirection(lead, "inbound");
+  const topic = lastInbound ? getConversationTopicLabel(lastInbound.message) : null;
+
   if (lead.leadType === "warm" || lead.status === "warm" || lead.status === "ready_to_close") {
-    return "Warm lead due for a light check-in so the conversation keeps moving without feeling pushy.";
+    return topic
+      ? `Warm lead due for a light check-in after asking about ${topic}.`
+      : "Warm lead due for a light check-in so the conversation keeps moving without feeling pushy.";
   }
 
   if (outboundCount <= 1) {
-    return "Initial outreach went out and this lead is now due for the first follow-up.";
+    return topic
+      ? `Initial outreach went out and this lead is now due for the first follow-up around ${topic}.`
+      : "Initial outreach went out and this lead is now due for the first follow-up.";
   }
 
   return "This lead has already had an opener and one nudge, so the next follow-up should stay light and low-pressure.";
@@ -197,16 +204,20 @@ function buildOpeningMessage(lead: Lead) {
 
 function buildFollowUpMessage(lead: Lead, outboundCount: number) {
   const greeting = buildGreeting(lead);
+  const lastInbound = getLatestConversationByDirection(lead, "inbound");
+  const lastOutbound = getLatestConversationByDirection(lead, "outbound");
+  const followUpContext = buildFollowUpContext(lastInbound?.message, lead);
 
   if (lead.leadType === "warm" || lead.status === "warm" || lead.status === "ready_to_close") {
-    return `${greeting}\n\nJust checking back in since we last spoke. Happy to answer anything else around setup, pricing, shipping, or which equipment would make the most sense for your space.\n\nIf useful, I can also point you toward the most relevant demo direction for your team.`;
+    return `${greeting}\n\nJust checking back in since we last spoke.${followUpContext} Happy to answer anything else around setup, pricing, shipping, or which equipment would make the most sense for your space.\n\nIf useful, I can also point you toward the most relevant demo direction for your team.`;
   }
 
   if (outboundCount <= 1) {
-    return `${greeting}\n\nJust following up on my earlier message in case it got buried. We work with operators looking at cryotherapy equipment for recovery, premium positioning, and stronger client retention.\n\nHappy to send a short overview if useful.`;
+    const previousAngle = lastOutbound ? buildOutboundReference(lastOutbound.message) : "";
+    return `${greeting}\n\nJust following up on my earlier message in case it got buried.${previousAngle} We work with operators looking at cryotherapy equipment for recovery, premium positioning, and stronger client retention.\n\nHappy to send a short overview if useful.`;
   }
 
-  return `${greeting}\n\nJust a light follow-up from my side. If cryotherapy equipment is something you're considering this year, happy to share the most relevant product direction and a quick demo link.\n\nIf not a priority right now, no worries at all.`;
+  return `${greeting}\n\nJust a light follow-up from my side.${followUpContext || " If cryotherapy equipment is something you're considering this year, happy to share the most relevant product direction and a quick demo link."}\n\nIf not a priority right now, no worries at all.`;
 }
 
 function buildGreeting(lead: Lead) {
@@ -228,6 +239,116 @@ function shouldGenerateFollowUpDraft(lead: Lead) {
 
   const dueDate = parseISO(lead.followUpDueAt);
   return isToday(dueDate) || isBefore(dueDate, new Date());
+}
+
+function getLatestConversationByDirection(lead: Lead, direction: "outbound" | "inbound") {
+  return lead.conversationHistory.find((event) => event.direction === direction);
+}
+
+function buildFollowUpContext(lastInboundMessage: string | undefined, lead: Lead) {
+  if (!lastInboundMessage) {
+    return "";
+  }
+
+  const lower = lastInboundMessage.toLowerCase();
+
+  if (lower.includes("price") || lower.includes("pricing") || lower.includes("cost") || lower.includes("how much")) {
+    return " Just picking up on your pricing question from earlier.";
+  }
+
+  if (lower.includes("demo") || lower.includes("video") || lower.includes("youtube")) {
+    return " Just picking up on your question about demo material.";
+  }
+
+  if (lower.includes("ship") || lower.includes("freight") || lower.includes("delivery")) {
+    return " Just picking up on the shipping side from your earlier message.";
+  }
+
+  if (lower.includes("payment") || lower.includes("deposit") || lower.includes("terms")) {
+    return " Just picking up on the payment terms question from earlier.";
+  }
+
+  if (lower.includes("footprint") || lower.includes("space") || lower.includes("room")) {
+    return " Just picking up on your earlier question around space and setup.";
+  }
+
+  if (lower.includes("support") || lower.includes("service") || lower.includes("installation")) {
+    return " Just picking up on your earlier question around support and setup.";
+  }
+
+  if (lower.includes("roi") || lower.includes("revenue") || lower.includes("return")) {
+    return " Just picking up on the commercial side you asked about earlier.";
+  }
+
+  if (lower.includes("chamber") || lower.includes("capsule") || lower.includes("equipment") || lower.includes("machine")) {
+    return ` Just picking up on the equipment direction that could make sense for ${lead.businessName}.`;
+  }
+
+  return " Just picking up on your earlier message.";
+}
+
+function buildOutboundReference(lastOutboundMessage: string) {
+  const cleaned = normalizeMessageSnippet(lastOutboundMessage);
+
+  if (!cleaned) {
+    return "";
+  }
+
+  return ` I had reached out previously around ${cleaned}.`;
+}
+
+function getConversationTopicLabel(message: string) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("price") || lower.includes("pricing") || lower.includes("cost") || lower.includes("how much")) {
+    return "pricing";
+  }
+
+  if (lower.includes("demo") || lower.includes("video") || lower.includes("youtube")) {
+    return "demo material";
+  }
+
+  if (lower.includes("ship") || lower.includes("freight") || lower.includes("delivery")) {
+    return "shipping";
+  }
+
+  if (lower.includes("payment") || lower.includes("deposit") || lower.includes("terms")) {
+    return "payment terms";
+  }
+
+  if (lower.includes("footprint") || lower.includes("space") || lower.includes("room")) {
+    return "space and setup";
+  }
+
+  if (lower.includes("support") || lower.includes("service") || lower.includes("installation")) {
+    return "support and installation";
+  }
+
+  if (lower.includes("roi") || lower.includes("revenue") || lower.includes("return")) {
+    return "commercial upside";
+  }
+
+  if (lower.includes("equipment") || lower.includes("machine") || lower.includes("chamber") || lower.includes("capsule")) {
+    return "equipment fit";
+  }
+
+  return "their earlier question";
+}
+
+function normalizeMessageSnippet(message: string) {
+  const cleaned = message
+    .replace(/\.$/, "")
+    .replace(/^reached out with\s+/i, "")
+    .replace(/^initial\s+/i, "")
+    .replace(/^introduced\s+/i, "")
+    .trim()
+    .toLowerCase();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  return cleaned;
 }
 
 function buildNoteHint(notes: string) {
