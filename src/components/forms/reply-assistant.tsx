@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { buildKnowledgeReplyDraft, quickAnswerLibrary } from "@/lib/sales-knowledge";
+import { buildKnowledgeReplyFromLeadMessage } from "@/lib/sales-knowledge";
 import type { Lead } from "@/lib/types";
 
 type ReplyAssistantProps = {
@@ -10,14 +10,14 @@ type ReplyAssistantProps = {
 };
 
 export function ReplyAssistant({ lead }: ReplyAssistantProps) {
-  const [questionId, setQuestionId] = useState(quickAnswerLibrary[0]?.id ?? "pricing");
+  const [inboundMessage, setInboundMessage] = useState("");
   const [customMessage, setCustomMessage] = useState("");
   const [draft, setDraft] = useState("");
   const [draftSource, setDraftSource] = useState<"template" | "anthropic">("template");
   const [errorMessage, setErrorMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const templateDraft = buildTemplateDraft(lead, questionId, customMessage);
+  const templateDraft = buildTemplateDraft(lead, inboundMessage, customMessage);
 
   useEffect(() => {
     setDraft(templateDraft);
@@ -38,7 +38,7 @@ export function ReplyAssistant({ lead }: ReplyAssistantProps) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          questionId,
+          inboundMessage,
           customMessage
         })
       });
@@ -75,14 +75,13 @@ export function ReplyAssistant({ lead }: ReplyAssistantProps) {
 
       <div className="reply-form">
         <label className="field">
-          <span>Question type</span>
-          <select onChange={(event) => setQuestionId(event.target.value)} value={questionId}>
-            {quickAnswerLibrary.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.question}
-              </option>
-            ))}
-          </select>
+          <span>Lead&apos;s message</span>
+          <textarea
+            onChange={(event) => setInboundMessage(event.target.value)}
+            placeholder="Paste the lead's actual WhatsApp reply here, for example: How much is the chamber and do you have a demo?"
+            rows={4}
+            value={inboundMessage}
+          />
         </label>
 
         <label className="field">
@@ -106,7 +105,12 @@ export function ReplyAssistant({ lead }: ReplyAssistantProps) {
         {errorMessage ? <p className="mini-message error">{errorMessage}</p> : null}
 
         <div className="lead-actions">
-          <button className="button button-secondary" disabled={isGenerating} onClick={handleGenerateAiReply} type="button">
+          <button
+            className="button button-secondary"
+            disabled={isGenerating || !inboundMessage.trim()}
+            onClick={handleGenerateAiReply}
+            type="button"
+          >
             {isGenerating ? "Generating..." : "Generate AI reply"}
           </button>
           <a className="button button-primary" href={whatsappHref} rel="noreferrer" target="_blank">
@@ -118,8 +122,11 @@ export function ReplyAssistant({ lead }: ReplyAssistantProps) {
   );
 }
 
-function buildTemplateDraft(lead: Lead, questionId: string, customMessage: string) {
-  const base = buildKnowledgeReplyDraft(lead, questionId);
+function buildTemplateDraft(lead: Lead, inboundMessage: string, customMessage: string) {
+  const trimmedInboundMessage = inboundMessage.trim();
+  const base = trimmedInboundMessage
+    ? buildKnowledgeReplyFromLeadMessage(lead, trimmedInboundMessage)
+    : "Paste the lead's message above, then generate a reply.";
 
   if (!customMessage.trim()) {
     return base;

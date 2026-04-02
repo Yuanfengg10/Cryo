@@ -100,6 +100,37 @@ export function buildKnowledgeReplyDraft(lead: Lead, questionId: string) {
   }
 }
 
+export function inferQuestionIdFromMessage(message: string) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("price") || lower.includes("pricing") || lower.includes("how much") || lower.includes("cost")) {
+    return "pricing";
+  }
+
+  if (lower.includes("demo") || lower.includes("video") || lower.includes("youtube") || lower.includes("show me")) {
+    return "demo";
+  }
+
+  if (lower.includes("ship") || lower.includes("freight") || lower.includes("delivery")) {
+    return "shipping";
+  }
+
+  if (lower.includes("payment") || lower.includes("deposit") || lower.includes("bank transfer") || lower.includes("terms")) {
+    return "payment";
+  }
+
+  if (lower.includes("equipment") || lower.includes("machine") || lower.includes("chamber") || lower.includes("what do you have")) {
+    return "equipment";
+  }
+
+  return "equipment";
+}
+
+export function buildKnowledgeReplyFromLeadMessage(lead: Lead, inboundMessage: string) {
+  const questionId = inferQuestionIdFromMessage(inboundMessage);
+  return buildKnowledgeReplyDraft(lead, questionId);
+}
+
 export function buildSalesKnowledgeContext(lead: Lead) {
   return [
     `Company: ${companyProfile.companyName}`,

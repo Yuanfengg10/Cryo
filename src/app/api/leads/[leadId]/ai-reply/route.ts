@@ -5,7 +5,7 @@ import { generateSalesReplyDraft } from "@/lib/ai-reply-engine";
 import { getLeadById } from "@/lib/lead-repository";
 
 const requestSchema = z.object({
-  questionId: z.string().min(1),
+  inboundMessage: z.string().min(3),
   customMessage: z.string().optional()
 });
 
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const result = await generateSalesReplyDraft({
     lead,
-    questionId: parsed.data.questionId,
+    inboundMessage: parsed.data.inboundMessage,
     customMessage: parsed.data.customMessage
   });
 

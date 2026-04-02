@@ -1,21 +1,28 @@
 import { getAnthropicKey, hasAnthropicEnv } from "@/lib/env";
 import type { Lead } from "@/lib/types";
-import { aiSalesGuardrails, buildKnowledgeReplyDraft, buildSalesKnowledgeContext, quickAnswerLibrary } from "@/lib/sales-knowledge";
+import {
+  aiSalesGuardrails,
+  buildKnowledgeReplyFromLeadMessage,
+  buildSalesKnowledgeContext,
+  inferQuestionIdFromMessage
+} from "@/lib/sales-knowledge";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 
 type GenerateReplyDraftParams = {
   lead: Lead;
-  questionId: string;
+  inboundMessage: string;
   customMessage?: string;
 };
 
 export async function generateSalesReplyDraft({
   lead,
-  questionId,
+  inboundMessage,
   customMessage
 }: GenerateReplyDraftParams) {
-  const fallbackDraft = appendCustomNote(buildKnowledgeReplyDraft(lead, questionId), customMessage);
+  const normalizedInboundMessage = inboundMessage.trim();
+  const inferredQuestionId = inferQuestionIdFromMessage(normalizedInboundMessage);
+  const fallbackDraft = appendCustomNote(buildKnowledgeReplyFromLeadMessage(lead, normalizedInboundMessage), customMessage);
 
   if (!hasAnthropicEnv()) {
     return {
@@ -33,8 +40,6 @@ export async function generateSalesReplyDraft({
     };
   }
 
-  const selectedQuestion = quickAnswerLibrary.find((item) => item.id === questionId);
-
   const systemPrompt = [
     "You are a sales reply assistant for Cryonick Wellness Factory.",
     ...aiSalesGuardrails.map((rule) => `- ${rule}`)
@@ -42,7 +47,8 @@ export async function generateSalesReplyDraft({
 
   const userPrompt = [
     buildSalesKnowledgeContext(lead),
-    `Question category: ${selectedQuestion?.question ?? questionId}`,
+    `Lead's inbound message: ${normalizedInboundMessage}`,
+    `Inferred category: ${inferredQuestionId}`,
     `Additional user note: ${customMessage?.trim() || "None"}`,
     "Write one WhatsApp reply only.",
     "Include a greeting.",
@@ -50,6 +56,7 @@ export async function generateSalesReplyDraft({
     "Keep it to roughly 70 to 140 words.",
     "Do not use bullet points.",
     "Do not use markdown.",
+    "Answer the actual message rather than forcing a canned category.",
     "If pricing is asked, explain that final price depends on setup and needs before quoting properly.",
     "If demo is asked, include the YouTube channel link.",
     "Close with a soft next step."
