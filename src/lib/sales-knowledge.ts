@@ -21,6 +21,18 @@ export const commercialTerms = {
 
 import type { Lead } from "@/lib/types";
 
+export const aiSalesGuardrails = [
+  "Sound natural, commercially helpful, and human on WhatsApp.",
+  "Do not sound robotic, over-eager, or overly salesy.",
+  "Answer only generic early-stage questions unless the user asks for something deeper.",
+  "Never invent specifications, pricing, shipping, payment terms, or delivery promises.",
+  "Use the provided commercial terms exactly when relevant.",
+  "Position Cryonick Wellness Factory as a cryotherapy equipment manufacturer.",
+  "If product fit is unclear, say it depends on setup and offer to narrow it down.",
+  "Keep replies concise, easy to skim, and suitable for WhatsApp.",
+  "End with a soft next step rather than pressure."
+];
+
 export const quickAnswerLibrary = [
   {
     id: "pricing",
@@ -86,6 +98,21 @@ export function buildKnowledgeReplyDraft(lead: Lead, questionId: string) {
     default:
       return `${greeting}\n\n${intro} Happy to share more details if useful.`;
   }
+}
+
+export function buildSalesKnowledgeContext(lead: Lead) {
+  return [
+    `Company: ${companyProfile.companyName}`,
+    `YouTube demo channel: ${companyProfile.youtubeChannel}`,
+    `Primary products: ${companyProfile.primaryProducts.join(", ")}`,
+    `Shipping guidance: ${commercialTerms.shipping.note} ${commercialTerms.shipping.singaporePortEurPerCrate}.`,
+    `Payment terms: ${commercialTerms.payment.standard}`,
+    `Made-to-order payment terms: ${commercialTerms.payment.madeToOrder}`,
+    `Lead business: ${lead.businessName}`,
+    `Lead segment: ${lead.businessType.replaceAll("_", " ")}`,
+    `Lead city: ${lead.city}`,
+    `Lead notes: ${lead.notes || "No extra notes recorded."}`
+  ].join("\n");
 }
 
 function getSuggestedProductHint(businessType: Lead["businessType"]) {

@@ -17,3 +17,11 @@ export function getGooglePlacesKey() {
 export function getCronSecret() {
   return process.env.CRON_SECRET;
 }
+
+export function hasAnthropicEnv() {
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+export function getAnthropicKey() {
+  return process.env.ANTHROPIC_API_KEY;
+}
