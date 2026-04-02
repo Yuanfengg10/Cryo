@@ -5,10 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { hasSupabaseEnv } from "@/lib/env";
+import { evaluateLeadHandoff } from "@/lib/handoff";
 import { getDefaultFollowUpDate } from "@/lib/lead-repository";
 import { runDailySourcing } from "@/lib/sourcing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { IntentScore } from "@/lib/types";
+import type { IntentScore, Lead } from "@/lib/types";
 
 const replySchema = z.object({
   leadId: z.string().min(1),
@@ -105,8 +106,17 @@ export async function logReplyAction(
 
   const { leadId, replySnippet, intentScore } = result.data;
   const supabase = createSupabaseServerClient();
-  const status = getStatusFromIntent(intentScore);
-  const followUpDueAt = getDefaultFollowUpDate(intentScore);
+  const currentLead = await loadLeadForHandoff(supabase, leadId);
+
+  if (!currentLead) {
+    return {
+      success: false,
+      message: "Could not load the lead for handoff evaluation."
+    };
+  }
+
+  const handoffEvaluation = evaluateLeadHandoff(currentLead, replySnippet, intentScore);
+  const followUpDueAt = handoffEvaluation.shouldHandoff ? addDays(new Date(), 1).toISOString() : getDefaultFollowUpDate(intentScore);
 
   const { error: eventError } = await supabase.from("conversation_events").insert({
     lead_id: leadId,
@@ -127,10 +137,11 @@ export async function logReplyAction(
     .from("leads")
     .update({
       lead_type: "warm",
-      status,
+      status: handoffEvaluation.status,
       intent_score: intentScore,
       last_contacted_at: new Date().toISOString(),
-      follow_up_due_at: followUpDueAt
+      follow_up_due_at: followUpDueAt,
+      probability: handoffEvaluation.probability
     })
     .eq("id", leadId);
 
@@ -146,16 +157,31 @@ export async function logReplyAction(
     activity_type: "reply_logged",
     metadata: {
       intent_score: intentScore,
-      follow_up_due_at: followUpDueAt
+      follow_up_due_at: followUpDueAt,
+      handoff_ready: handoffEvaluation.shouldHandoff,
+      handoff_reason: handoffEvaluation.reason
     }
   });
+
+  if (handoffEvaluation.shouldHandoff) {
+    await supabase.from("activity_log").insert({
+      lead_id: leadId,
+      activity_type: "status_changed",
+      metadata: {
+        moved_to: "ready_to_close",
+        reason: handoffEvaluation.reason
+      }
+    });
+  }
 
   revalidatePath("/");
   revalidatePath(`/leads/${leadId}`);
 
   return {
     success: true,
-    message: "Reply logged and follow-up timing refreshed."
+    message: handoffEvaluation.shouldHandoff
+      ? "Reply logged. This lead is now marked ready for your handoff."
+      : "Reply logged and follow-up timing refreshed."
   };
 }
 
@@ -541,6 +567,95 @@ export async function runDailySourcingNowAction(
 
 function getStatusFromIntent(intentScore: IntentScore) {
   return intentScore === "interested" ? "ready_to_close" : "warm";
+}
+
+async function loadLeadForHandoff(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  leadId: string
+): Promise<Lead | null> {
+  const { data: leadRow, error: leadError } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (leadError || !leadRow) {
+    console.error("Failed to load lead for handoff evaluation:", leadError?.message);
+    return null;
+  }
+
+  const { data: conversationRows, error: conversationError } = await supabase
+    .from("conversation_events")
+    .select("*")
+    .eq("lead_id", leadId)
+    .order("occurred_at", { ascending: false });
+
+  if (conversationError) {
+    console.error("Failed to load lead conversation for handoff evaluation:", conversationError.message);
+    return null;
+  }
+
+  return {
+    id: String(leadRow.id),
+    businessName: String(leadRow.business_name),
+    businessType: normalizeBusinessTypeValue(String(leadRow.business_type)),
+    city: String(leadRow.city),
+    phone: String(leadRow.phone),
+    contactName: leadRow.contact_name ? String(leadRow.contact_name) : undefined,
+    status: normalizeLeadStatusValue(String(leadRow.status)),
+    leadType: leadRow.lead_type === "warm" ? "warm" : "cold",
+    notes: String(leadRow.notes ?? ""),
+    intentScore:
+      leadRow.intent_score === "interested" || leadRow.intent_score === "neutral" || leadRow.intent_score === "not_interested"
+        ? leadRow.intent_score
+        : undefined,
+    firstContactedAt: leadRow.first_contacted_at ?? undefined,
+    lastContactedAt: leadRow.last_contacted_at ?? undefined,
+    followUpDueAt: leadRow.follow_up_due_at ?? undefined,
+    projectedCommission: Number(leadRow.projected_commission_eur ?? 0),
+    probability: Number(leadRow.probability ?? 0),
+    generatedMessage: "",
+    sendWindow: "",
+    conversationHistory: ((conversationRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      direction: row.direction === "inbound" ? "inbound" : "outbound",
+      channel: "whatsapp",
+      message: String(row.message ?? ""),
+      timestamp: String(row.occurred_at)
+    }))
+  };
+}
+
+function normalizeBusinessTypeValue(value: string): Lead["businessType"] {
+  if (
+    value === "gym" ||
+    value === "clinic" ||
+    value === "spa" ||
+    value === "wellness_studio" ||
+    value === "sports_centre" ||
+    value === "longevity_clinic" ||
+    value === "biohacking_centre"
+  ) {
+    return value;
+  }
+
+  return "wellness_studio";
+}
+
+function normalizeLeadStatusValue(value: string): Lead["status"] {
+  if (
+    value === "new" ||
+    value === "contacted" ||
+    value === "followup_due" ||
+    value === "warm" ||
+    value === "ready_to_close" ||
+    value === "closed" ||
+    value === "dead"
+  ) {
+    return value;
+  }
+
+  return "new";
 }
 
 function getDefaultCommission(businessType: string) {

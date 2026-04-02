@@ -10,6 +10,7 @@ import { RunDailySourcingForm } from "@/components/forms/run-daily-sourcing-form
 import { LeadCard } from "@/components/lead-card";
 import { SourcingCandidateCard } from "@/components/sourcing-candidate-card";
 import { StatCard } from "@/components/stat-card";
+import { getLeadHandoffReason } from "@/lib/handoff";
 import { getAutomationStatus, getDashboardData } from "@/lib/lead-repository";
 import { buildOutboundDrafts } from "@/lib/message-generator";
 import { getSourcingSnapshot } from "@/lib/sourcing";
@@ -22,6 +23,7 @@ export default async function Home() {
   const automationStatus = await getAutomationStatus();
   const sourcingSnapshot = await getSourcingSnapshot();
   const approvalQueue = buildOutboundDrafts(activeLeads);
+  const readyForHandoff = activeLeads.filter((lead) => lead.status === "ready_to_close").slice(0, 6);
   const hasLeads = activeLeads.length > 0;
 
   return (
@@ -276,6 +278,45 @@ export default async function Home() {
       </section>
 
       <section className="content-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Handoff queue</p>
+              <h2>Leads ready for Yuan</h2>
+            </div>
+            <span className="panel-kicker">{readyForHandoff.length} ready now</span>
+          </div>
+
+          <div className="stack">
+            {readyForHandoff.length ? (
+              readyForHandoff.map((lead) => (
+                <article className="approval-card" key={`handoff-${lead.id}`}>
+                  <div className="approval-header">
+                    <div>
+                      <p className="eyebrow">Ready to close</p>
+                      <h3>{lead.businessName}</h3>
+                      <p className="muted">
+                        {lead.city} · {lead.businessType.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                    <span className="approval-type approval-followup">handoff</span>
+                  </div>
+
+                  <p className="approval-reason">{getLeadHandoffReason(lead)}</p>
+
+                  <div className="lead-actions">
+                    <a className="button button-primary" href={`/leads/${lead.id}`}>
+                      Open lead
+                    </a>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">No leads have crossed the handoff threshold yet.</div>
+            )}
+          </div>
+        </section>
+
         <section className="panel">
           <div className="panel-header">
             <div>
