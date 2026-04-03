@@ -1,6 +1,11 @@
 import { isBefore, isToday, parseISO } from "date-fns";
 
+import { getAnthropicKey, hasAnthropicEnv } from "@/lib/env";
+import { aiSalesGuardrails, buildSalesKnowledgeContext } from "@/lib/sales-knowledge";
 import type { ApprovalDraft, Lead } from "@/lib/types";
+
+const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const AI_DRAFT_LIMIT = 8;
 
 const introByType: Record<Lead["businessType"], string[]> = {
   gym: [
@@ -116,7 +121,49 @@ const closeByType: Record<Lead["businessType"], string[]> = {
   ]
 };
 
-export function buildOutboundDrafts(leads: Lead[]) {
+export async function buildApprovalDrafts(leads: Lead[]) {
+  const fallbackDrafts = buildFallbackApprovalDrafts(leads);
+
+  if (!hasAnthropicEnv()) {
+    return fallbackDrafts;
+  }
+
+  const apiKey = getAnthropicKey();
+
+  if (!apiKey) {
+    return fallbackDrafts;
+  }
+
+  const aiDrafts = await Promise.all(
+    fallbackDrafts.map(async (draft, index) => {
+      if (index >= AI_DRAFT_LIMIT) {
+        return draft;
+      }
+
+      const lead = leads.find((item) => item.id === draft.leadId);
+
+      if (!lead) {
+        return draft;
+      }
+
+      const generatedMessage = await generateAiApprovalMessage({
+        lead,
+        draft,
+        apiKey
+      });
+
+      return {
+        ...draft,
+        message: generatedMessage ?? draft.message,
+        draftSource: generatedMessage ? ("anthropic" as const) : ("template" as const)
+      } satisfies ApprovalDraft;
+    })
+  );
+
+  return aiDrafts;
+}
+
+export function buildFallbackApprovalDrafts(leads: Lead[]) {
   const firstContactDrafts = leads
     .filter((lead) => lead.status === "new" && lead.leadType === "cold")
     .slice(0, 20)
@@ -367,6 +414,90 @@ function buildNoteHint(notes: string) {
   }
 
   return "";
+}
+
+async function generateAiApprovalMessage({
+  lead,
+  draft,
+  apiKey
+}: {
+  lead: Lead;
+  draft: ApprovalDraft;
+  apiKey: string;
+}) {
+  const systemPrompt = [
+    "You are a WhatsApp sales drafting assistant for Cryonick Wellness Factory.",
+    ...aiSalesGuardrails.map((rule) => `- ${rule}`),
+    "- Keep outbound drafts natural, clear, and commercially credible.",
+    "- Avoid sounding like a marketing brochure.",
+    "- Do not use bullet points or markdown.",
+    "- Keep messages suitable for a first WhatsApp touch or a light follow-up."
+  ].join("\n");
+
+  const lastInbound = getLatestConversationByDirection(lead, "inbound");
+  const lastOutbound = getLatestConversationByDirection(lead, "outbound");
+
+  const userPrompt = [
+    buildSalesKnowledgeContext(lead),
+    `Draft type: ${draft.type === "outbound" ? "first outreach" : "follow-up"}`,
+    `Lead status: ${lead.status}`,
+    `Lead type: ${lead.leadType}`,
+    `Reason for draft: ${draft.reason}`,
+    `Existing fallback draft: ${draft.message}`,
+    `Last outbound message: ${lastOutbound?.message ?? "None"}`,
+    `Last inbound message: ${lastInbound?.message ?? "None"}`,
+    "Write one WhatsApp message only.",
+    "Include a greeting.",
+    "Introduce Yuan from Cryonick Wellness Factory naturally when it is the first outreach.",
+    "If it is a follow-up, make it feel like a continuation of the conversation.",
+    "Keep it roughly 55 to 120 words.",
+    "Close with a soft next step."
+  ].join("\n\n");
+
+  try {
+    const response = await fetch(ANTHROPIC_MESSAGES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 220,
+        temperature: 0.55,
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: userPrompt
+          }
+        ]
+      }),
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Anthropic outbound/follow-up generation failed:", errorText);
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      content?: Array<{ type?: string; text?: string }>;
+    };
+
+    const generatedMessage = payload.content
+      ?.filter((item) => item.type === "text" && item.text)
+      .map((item) => item.text?.trim())
+      .filter(Boolean)
+      .join("\n\n");
+
+    return generatedMessage || null;
+  } catch (error) {
+    console.error("Anthropic outbound/follow-up generation crashed:", error);
+    return null;
+  }
 }
 
 function pick(options: string[], seed: string) {

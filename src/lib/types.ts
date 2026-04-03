@@ -108,6 +108,7 @@ export type ApprovalDraft = {
   nextStatus?: LeadStatus;
   nextFollowUpDays?: number;
   sequenceNumber?: number;
+  draftSource?: "template" | "anthropic";
 };
 
 export type SearchPlay = {

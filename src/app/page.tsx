@@ -12,7 +12,7 @@ import { SourcingCandidateCard } from "@/components/sourcing-candidate-card";
 import { StatCard } from "@/components/stat-card";
 import { getLeadHandoffReason } from "@/lib/handoff";
 import { getAutomationStatus, getDashboardData } from "@/lib/lead-repository";
-import { buildOutboundDrafts } from "@/lib/message-generator";
+import { buildApprovalDrafts } from "@/lib/message-generator";
 import { getSourcingSnapshot } from "@/lib/sourcing";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export default async function Home() {
     await getDashboardData();
   const automationStatus = await getAutomationStatus();
   const sourcingSnapshot = await getSourcingSnapshot();
-  const approvalQueue = buildOutboundDrafts(activeLeads);
+  const approvalQueue = await buildApprovalDrafts(activeLeads);
   const readyForHandoff = activeLeads.filter((lead) => lead.status === "ready_to_close").slice(0, 6);
   const hasLeads = activeLeads.length > 0;
 

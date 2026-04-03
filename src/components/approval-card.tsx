@@ -29,6 +29,7 @@ export function ApprovalCard({ draft }: ApprovalCardProps) {
           <p className="muted">
             {draft.city} · {draft.businessType}
           </p>
+          <p className="muted">{draft.draftSource === "anthropic" ? "AI-crafted draft" : "Fallback draft"}</p>
         </div>
         <span className={`approval-type approval-${draft.type}`}>{typeLabel}</span>
       </div>
