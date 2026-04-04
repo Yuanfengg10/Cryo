@@ -24,7 +24,10 @@ const approvalSchema = z.object({
   cadenceType: z.enum(["cold", "warm"]).optional(),
   nextStatus: z.enum(["contacted", "followup_due", "warm", "ready_to_close"]).optional(),
   nextFollowUpDays: z.coerce.number().int().positive().optional(),
-  sequenceNumber: z.coerce.number().int().positive().optional()
+  sequenceNumber: z.coerce.number().int().positive().optional(),
+  originalMessage: z.string().optional(),
+  draftSource: z.enum(["template", "anthropic"]).optional(),
+  reason: z.string().optional()
 });
 
 export type ReplyActionState = {
@@ -294,7 +297,10 @@ export async function approveOutboundDraftAction(
     cadenceType: formData.get("cadenceType") || undefined,
     nextStatus: formData.get("nextStatus") || undefined,
     nextFollowUpDays: formData.get("nextFollowUpDays") || undefined,
-    sequenceNumber: formData.get("sequenceNumber") || undefined
+    sequenceNumber: formData.get("sequenceNumber") || undefined,
+    originalMessage: formData.get("originalMessage") || undefined,
+    draftSource: formData.get("draftSource") || undefined,
+    reason: formData.get("reason") || undefined
   });
 
   if (!result.success) {
@@ -312,7 +318,8 @@ export async function approveOutboundDraftAction(
   }
 
   const supabase = createSupabaseServerClient();
-  const { leadId, message, draftType, cadenceType, nextFollowUpDays, nextStatus, sequenceNumber } = result.data;
+  const { leadId, message, draftType, cadenceType, nextFollowUpDays, nextStatus, sequenceNumber, originalMessage, draftSource, reason } =
+    result.data;
   const now = new Date().toISOString();
   const followUpDueAt = addDays(new Date(), draftType === "outbound" ? 3 : nextFollowUpDays ?? 4).toISOString();
   const leadUpdate: {
@@ -343,6 +350,39 @@ export async function approveOutboundDraftAction(
       success: false,
       message: conversationError.message
     };
+  }
+
+  const { data: generationRow, error: generationError } = await supabase
+    .from("message_generations")
+    .insert({
+      lead_id: leadId,
+      message_kind: draftType === "outbound" ? "cold_open" : "follow_up",
+      model_name: draftSource === "anthropic" ? "claude-sonnet-4-20250514" : "rule_fallback",
+      prompt_snapshot: JSON.stringify({
+        draft_type: draftType,
+        cadence_type: cadenceType ?? "cold",
+        reason: reason ?? null,
+        source: draftSource ?? "template"
+      }),
+      generated_message: originalMessage ?? message,
+      edited_message: originalMessage && originalMessage !== message ? message : null
+    })
+    .select("id")
+    .single();
+
+  if (generationError) {
+    console.error("Failed to persist message generation:", generationError.message);
+  } else {
+    await supabase.from("activity_log").insert({
+      lead_id: leadId,
+      activity_type: "message_generated",
+      metadata: {
+        draft_type: draftType,
+        generation_id: generationRow.id,
+        source: draftSource ?? "template",
+        edited: Boolean(originalMessage && originalMessage !== message)
+      }
+    });
   }
 
   const { error: leadError } = await supabase
@@ -378,13 +418,18 @@ export async function approveOutboundDraftAction(
       .eq("status", "pending");
   }
 
-  await supabase.from("follow_up_tasks").insert({
+  const { error: followUpInsertError } = await supabase.from("follow_up_tasks").insert({
     lead_id: leadId,
     sequence_number: sequenceNumber ?? (draftType === "outbound" ? 1 : 2),
     cadence_type: cadenceType ?? "cold",
     due_at: followUpDueAt,
-    status: "pending"
+    status: "pending",
+    message_generation_id: generationRow?.id ?? null
   });
+
+  if (followUpInsertError) {
+    console.error("Failed to insert follow-up task:", followUpInsertError.message);
+  }
 
   await supabase.from("activity_log").insert({
     lead_id: leadId,

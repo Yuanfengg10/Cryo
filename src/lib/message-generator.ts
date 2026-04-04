@@ -2,6 +2,7 @@ import { isBefore, isToday, parseISO } from "date-fns";
 
 import { getAnthropicKey, hasAnthropicEnv } from "@/lib/env";
 import { aiSalesGuardrails, buildSalesKnowledgeContext } from "@/lib/sales-knowledge";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ApprovalDraft, Lead } from "@/lib/types";
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
@@ -134,6 +135,8 @@ export async function buildApprovalDrafts(leads: Lead[]) {
     return fallbackDrafts;
   }
 
+  const styleExamples = await loadRecentApprovedEditExamples();
+
   const aiDrafts = await Promise.all(
     fallbackDrafts.map(async (draft, index) => {
       if (index >= AI_DRAFT_LIMIT) {
@@ -149,7 +152,8 @@ export async function buildApprovalDrafts(leads: Lead[]) {
       const generatedMessage = await generateAiApprovalMessage({
         lead,
         draft,
-        apiKey
+        apiKey,
+        styleExamples
       });
 
       return {
@@ -419,11 +423,13 @@ function buildNoteHint(notes: string) {
 async function generateAiApprovalMessage({
   lead,
   draft,
-  apiKey
+  apiKey,
+  styleExamples
 }: {
   lead: Lead;
   draft: ApprovalDraft;
   apiKey: string;
+  styleExamples: string[];
 }) {
   const systemPrompt = [
     "You are a WhatsApp sales drafting assistant for Cryonick Wellness Factory.",
@@ -446,6 +452,9 @@ async function generateAiApprovalMessage({
     `Existing fallback draft: ${draft.message}`,
     `Last outbound message: ${lastOutbound?.message ?? "None"}`,
     `Last inbound message: ${lastInbound?.message ?? "None"}`,
+    styleExamples.length
+      ? `Recent approved edit examples to match in tone:\n${styleExamples.map((example, index) => `${index + 1}. ${example}`).join("\n")}`
+      : "Recent approved edit examples to match in tone: None yet.",
     "Write one WhatsApp message only.",
     "Include a greeting.",
     "Introduce Yuan from Cryonick Wellness Factory naturally when it is the first outreach.",
@@ -497,6 +506,30 @@ async function generateAiApprovalMessage({
   } catch (error) {
     console.error("Anthropic outbound/follow-up generation crashed:", error);
     return null;
+  }
+}
+
+async function loadRecentApprovedEditExamples() {
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("message_generations")
+      .select("generated_message, edited_message")
+      .not("edited_message", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(3);
+
+    if (error) {
+      console.error("Failed to load recent approved edit examples:", error.message);
+      return [];
+    }
+
+    return (data ?? [])
+      .map((row) => String(row.edited_message ?? "").trim())
+      .filter(Boolean);
+  } catch (error) {
+    console.error("Failed to build style examples:", error);
+    return [];
   }
 }
 

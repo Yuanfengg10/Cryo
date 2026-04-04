@@ -42,6 +42,9 @@ export function ApprovalCard({ draft }: ApprovalCardProps) {
         <input name="nextStatus" type="hidden" value={draft.nextStatus ?? ""} />
         <input name="nextFollowUpDays" type="hidden" value={String(draft.nextFollowUpDays ?? "")} />
         <input name="sequenceNumber" type="hidden" value={String(draft.sequenceNumber ?? "")} />
+        <input name="originalMessage" type="hidden" value={draft.message} />
+        <input name="draftSource" type="hidden" value={draft.draftSource ?? "template"} />
+        <input name="reason" type="hidden" value={draft.reason} />
 
         <label className="approval-editor">
           <span className="eyebrow">Message</span>
