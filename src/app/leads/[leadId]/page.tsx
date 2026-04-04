@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarClock, CircleDollarSign, MessageSquare, Phone } from "lucide-react";
 
-import { ReplyAssistant } from "@/components/forms/reply-assistant";
-import { ReplyLogForm } from "@/components/forms/reply-log-form";
+import { InboundWorkbench } from "@/components/forms/inbound-workbench";
 import { StatusPill } from "@/components/status-pill";
 import { formatFollowUpLabel, getLeadById } from "@/lib/lead-repository";
 import { getLastTouchLabel, getWhatsappHref } from "@/lib/mock-data";
@@ -110,20 +109,9 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
 
           <p className="hero-text">{lead.notes}</p>
         </section>
-
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Log reply</p>
-              <h2>Keep the pipeline current</h2>
-            </div>
-          </div>
-
-          <ReplyLogForm leadId={lead.id} />
-        </section>
       </section>
 
-      <ReplyAssistant lead={lead} />
+      <InboundWorkbench lead={lead} />
 
       <section className="panel">
         <div className="panel-header">
