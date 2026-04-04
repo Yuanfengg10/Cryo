@@ -1,6 +1,6 @@
 import { Activity, ArrowRight, CalendarClock, CircleDollarSign, Sparkles } from "lucide-react";
 
-import { handoffRules, searchPlays } from "@/lib/agent-config";
+import { handoffRules, leadQualificationChecklist, searchPlays, weeklyOperatingStandard } from "@/lib/agent-config";
 import { ApprovalCard } from "@/components/approval-card";
 import { AddLeadForm } from "@/components/forms/add-lead-form";
 import { KnowledgeCard } from "@/components/knowledge-card";
@@ -407,15 +407,47 @@ export default async function Home() {
         <section className="panel">
           <div className="panel-header">
             <div>
+              <p className="eyebrow">Qualification</p>
+              <h2>Lead checklist from the manual</h2>
+            </div>
+          </div>
+
+          <ul className="plain-list">
+            {leadQualificationChecklist.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      </section>
+
+      <section className="content-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Weekly discipline</p>
+              <h2>Operator standard from the manual</h2>
+            </div>
+          </div>
+
+          <ul className="plain-list">
+            {weeklyOperatingStandard.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
               <p className="eyebrow">Next build steps</p>
               <h2>Most important backend integrations</h2>
             </div>
           </div>
 
           <ul className="plain-list">
-            <li>Knowledge-base ingestion for catalog, pricing, FAQs, and demo links.</li>
-            <li>Lead ingestion from Google Places and social/manual search review.</li>
-            <li>Approval-driven outbound and inbound messaging queue.</li>
+            <li>Deeper catalog and price-sheet ingestion from product materials.</li>
+            <li>More lead enrichment around decision-makers, distributor types, and competitor-customer signals.</li>
+            <li>Approval-driven outbound and inbound messaging queue with stronger memory.</li>
             <li>Handoff scoring once leads stay engaged after generic Q&amp;A.</li>
             <li>Verified WhatsApp automation once Meta business setup is ready.</li>
           </ul>
