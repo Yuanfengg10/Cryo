@@ -289,23 +289,68 @@ function mapPlaceToCandidate(place: GooglePlaceResult, matchedQuery: string): So
   }
 
   const businessType = classifyBusinessType(place, matchedQuery);
+  const leadCategory = classifyLeadCategory(place, matchedQuery, businessName);
   const city = extractCity(place.formattedAddress, matchedQuery);
-  const fitScore = scoreCandidate(businessType, matchedQuery, place);
+  const fitScore = scoreCandidate(businessType, leadCategory, matchedQuery, place);
 
   return {
     id: place.id,
     businessName,
     businessTypeKey: normalizeBusinessTypeKey(businessType),
     businessType,
+    leadCategory,
     city,
     source: "Google Places",
     fitScore,
-    reason: buildReason(businessType, matchedQuery, place),
+    reason: buildReason(businessType, leadCategory, matchedQuery, place),
     address: place.formattedAddress,
     phone: place.nationalPhoneNumber,
     website: place.websiteUri,
     mapsUrl: place.googleMapsUri
   };
+}
+
+function classifyLeadCategory(place: GooglePlaceResult, matchedQuery: string, businessName: string): SourcingCandidate["leadCategory"] {
+  const haystack = [businessName, matchedQuery, place.primaryType, ...(place.types ?? [])].join(" ").toLowerCase();
+
+  if (
+    haystack.includes("competitor") ||
+    haystack.includes("cryo built") ||
+    haystack.includes("juka") ||
+    haystack.includes("vacuactivus distributor")
+  ) {
+    return "monitor_only_competitor";
+  }
+
+  if (
+    matchedQuery.toLowerCase().includes("distributor") ||
+    haystack.includes("dealer") ||
+    haystack.includes("supplier") ||
+    haystack.includes("wholesale")
+  ) {
+    return "distributor";
+  }
+
+  if (
+    matchedQuery.toLowerCase().includes("marketplace") ||
+    matchedQuery.toLowerCase().includes("listing") ||
+    matchedQuery.toLowerCase().includes("platform") ||
+    haystack.includes("directory")
+  ) {
+    return "reseller_platform";
+  }
+
+  if (
+    matchedQuery.toLowerCase().includes("cryotherapy available") ||
+    matchedQuery.toLowerCase().includes("recovery zone") ||
+    matchedQuery.toLowerCase().includes("performance lab") ||
+    matchedQuery.toLowerCase().includes("wellness suite") ||
+    matchedQuery.toLowerCase().includes("rehabilitation technology")
+  ) {
+    return "competitor_customer";
+  }
+
+  return "end_user";
 }
 
 function classifyBusinessType(place: GooglePlaceResult, matchedQuery: string) {
@@ -393,11 +438,36 @@ function extractCity(formattedAddress: string | undefined, matchedQuery: string)
   return parts.at(-2) ?? parts.at(-1) ?? "Unknown";
 }
 
-function scoreCandidate(businessType: string, matchedQuery: string, place: GooglePlaceResult) {
+function scoreCandidate(
+  businessType: string,
+  leadCategory: SourcingCandidate["leadCategory"],
+  matchedQuery: string,
+  place: GooglePlaceResult
+) {
   let score = 55;
 
   if (businessType === "longevity clinic" || businessType === "biohacking centre") {
     score += 20;
+  }
+
+  if (leadCategory === "end_user") {
+    score += 8;
+  }
+
+  if (leadCategory === "competitor_customer") {
+    score += 12;
+  }
+
+  if (leadCategory === "distributor") {
+    score += 2;
+  }
+
+  if (leadCategory === "reseller_platform") {
+    score -= 8;
+  }
+
+  if (leadCategory === "monitor_only_competitor") {
+    score -= 30;
   }
 
   if (matchedQuery.toLowerCase().includes("summit") || matchedQuery.toLowerCase().includes("expo")) {
@@ -415,11 +485,32 @@ function scoreCandidate(businessType: string, matchedQuery: string, place: Googl
   return Math.max(0, Math.min(98, score));
 }
 
-function buildReason(businessType: string, matchedQuery: string, place: GooglePlaceResult) {
+function buildReason(
+  businessType: string,
+  leadCategory: SourcingCandidate["leadCategory"],
+  matchedQuery: string,
+  place: GooglePlaceResult
+) {
   const reasons = [];
 
   if (businessType === "longevity clinic" || businessType === "biohacking centre") {
     reasons.push("Direct fit for longevity and flagship cryo positioning.");
+  }
+
+  if (leadCategory === "distributor") {
+    reasons.push("Looks more like a distributor or dealer opportunity than a direct end-user.");
+  }
+
+  if (leadCategory === "reseller_platform") {
+    reasons.push("Looks like a listing or reseller platform worth evaluating for exposure or supplier onboarding.");
+  }
+
+  if (leadCategory === "competitor_customer") {
+    reasons.push("Possible current user of similar equipment and may be open to upgrade or expansion.");
+  }
+
+  if (leadCategory === "monitor_only_competitor") {
+    reasons.push("Treat as monitor-only competitor lead. Do not share sensitive materials.");
   }
 
   if (place.nationalPhoneNumber) {
@@ -463,7 +554,11 @@ function dedupeCandidates(candidates: SourcingCandidate[]) {
 
 async function ingestQualifiedCandidates(candidates: SourcingCandidate[], searchesRun: string[]) {
   const qualified = candidates.filter(
-    (candidate) => candidate.fitScore >= AUTO_ADD_THRESHOLD && candidate.businessType !== "event"
+    (candidate) =>
+      candidate.fitScore >= AUTO_ADD_THRESHOLD &&
+      candidate.businessType !== "event" &&
+      candidate.leadCategory !== "monitor_only_competitor" &&
+      candidate.leadCategory !== "reseller_platform"
   );
 
   if (!qualified.length) {

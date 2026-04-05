@@ -23,6 +23,9 @@ export function SourcingCandidateCard({ candidate }: SourcingCandidateCardProps)
           <p className="muted">
             {candidate.city} · {candidate.businessType}
           </p>
+          {candidate.leadCategory ? (
+            <p className="muted">Category: {candidate.leadCategory.replaceAll("_", " ")}</p>
+          ) : null}
         </div>
         <div className="candidate-score-stack">
           <span className="fit-score">{candidate.fitScore}</span>

@@ -129,6 +129,7 @@ export type SourcingCandidate = {
     | "longevity_clinic"
     | "biohacking_centre";
   businessType: string;
+  leadCategory?: "end_user" | "distributor" | "reseller_platform" | "competitor_customer" | "monitor_only_competitor";
   city: string;
   source: string;
   fitScore: number;
