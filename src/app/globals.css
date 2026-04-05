@@ -741,6 +741,15 @@ button {
   gap: 16px;
 }
 
+.compact-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.compact-panel-header {
+  margin-bottom: 12px;
+}
+
 .compact-list {
   padding-left: 16px;
 }

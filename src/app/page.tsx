@@ -24,6 +24,33 @@ export default async function Home() {
   const sourcingSnapshot = await getSourcingSnapshot();
   const approvalQueue = await buildApprovalDrafts(activeLeads);
   const readyForHandoff = activeLeads.filter((lead) => lead.status === "ready_to_close").slice(0, 6);
+  const sourcingLanes = [
+    {
+      key: "end_user",
+      title: "Direct buyers",
+      description: "Main end-user sales opportunities that fit the core outreach pipeline."
+    },
+    {
+      key: "competitor_customer",
+      title: "Upgrade watchlist",
+      description: "Possible current users of similar equipment who may be ready for upgrade or expansion."
+    },
+    {
+      key: "distributor",
+      title: "Distributor opportunities",
+      description: "Partner-style leads that may need management approval before deeper sharing."
+    },
+    {
+      key: "reseller_platform",
+      title: "Platform opportunities",
+      description: "Listing sites and reseller platforms for exposure, supplier onboarding, or marketplace cooperation."
+    },
+    {
+      key: "monitor_only_competitor",
+      title: "Monitor-only competitors",
+      description: "Visible for market intelligence only. Do not treat them like normal commercial leads."
+    }
+  ] as const;
   const hasLeads = activeLeads.length > 0;
 
   return (
@@ -171,31 +198,53 @@ export default async function Home() {
         </section>
       </section>
 
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Sourcing review</p>
+            <h2>What the agent has found</h2>
+          </div>
+          <span className="panel-kicker">{sourcingSnapshot.candidates.length} candidates</span>
+        </div>
+
+        <p className="muted sourcing-caption">
+          Provider: {sourcingSnapshot.provider} · Mode: {sourcingSnapshot.mode} · Searches: {sourcingSnapshot.searchesRun.length}
+          {" · "}
+          Auto-added today: {sourcingSnapshot.autoAddedCount}/{sourcingSnapshot.dailyTarget} above score {sourcingSnapshot.threshold}
+          {" · "}
+          Remaining today: {sourcingSnapshot.remainingToday}
+        </p>
+
+        <div className="search-play-grid">
+          {sourcingLanes.map((lane) => {
+            const laneCandidates = sourcingSnapshot.candidates.filter((candidate) => candidate.leadCategory === lane.key);
+
+            return (
+              <section className="search-play-card" key={lane.key}>
+                <div className="panel-header compact-panel-header">
+                  <div>
+                    <h3>{lane.title}</h3>
+                    <p className="muted">{lane.description}</p>
+                  </div>
+                  <span className="panel-kicker">{laneCandidates.length}</span>
+                </div>
+
+                <div className="stack compact-stack">
+                  {laneCandidates.length ? (
+                    laneCandidates.map((candidate) => (
+                      <SourcingCandidateCard candidate={candidate} key={`${candidate.id}-${candidate.businessName}-${candidate.city}`} />
+                    ))
+                  ) : (
+                    <div className="empty-state">No candidates in this lane right now.</div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="content-grid">
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Sourcing review</p>
-              <h2>What the agent has found</h2>
-            </div>
-            <span className="panel-kicker">{sourcingSnapshot.candidates.length} candidates</span>
-          </div>
-
-          <p className="muted sourcing-caption">
-            Provider: {sourcingSnapshot.provider} · Mode: {sourcingSnapshot.mode} · Searches: {sourcingSnapshot.searchesRun.length}
-            {" · "}
-            Auto-added today: {sourcingSnapshot.autoAddedCount}/{sourcingSnapshot.dailyTarget} above score {sourcingSnapshot.threshold}
-            {" · "}
-            Remaining today: {sourcingSnapshot.remainingToday}
-          </p>
-
-          <div className="stack">
-            {sourcingSnapshot.candidates.map((candidate) => (
-              <SourcingCandidateCard candidate={candidate} key={`${candidate.id}-${candidate.businessName}-${candidate.city}`} />
-            ))}
-          </div>
-        </section>
-
         <section className="panel">
           <div className="panel-header">
             <div>
