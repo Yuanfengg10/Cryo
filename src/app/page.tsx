@@ -127,6 +127,49 @@ export default async function Home() {
       </section>
 
       <section className="content-grid">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Start Here</p>
+              <h2>Daily operator flow</h2>
+            </div>
+          </div>
+
+          <ol className="number-list">
+            <li>Run today&apos;s sourcing and let the agent refresh the lead list.</li>
+            <li>Review direct buyers and upgrade-watchlist leads in sourcing review.</li>
+            <li>Approve the AI outreach and follow-up drafts in the approval queue.</li>
+            <li>Use the handoff queue for leads the system thinks are ready for you.</li>
+          </ol>
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Launchpad</p>
+              <h2>Most useful actions</h2>
+            </div>
+          </div>
+
+          <div className="lead-actions">
+            <a className="button button-secondary" href="#sourcing-review">
+              Review sourcing
+            </a>
+            <a className="button button-secondary" href="#approval-queue">
+              Open approval queue
+            </a>
+            <a className="button button-secondary" href="#handoff-queue">
+              Open handoff queue
+            </a>
+          </div>
+
+          <div className="stack compact-stack">
+            <RunDailySourcingForm />
+          </div>
+        </section>
+      </section>
+
+      <section className="content-grid">
         <KnowledgeCard />
 
         <section className="panel">
@@ -203,7 +246,7 @@ export default async function Home() {
         </section>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="sourcing-review">
         <div className="panel-header">
           <div>
             <p className="eyebrow">Sourcing review</p>
@@ -264,7 +307,7 @@ export default async function Home() {
       </section>
 
       <section className="content-grid">
-        <section className="panel">
+        <section className="panel" id="handoff-queue">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Daily target</p>
@@ -281,7 +324,7 @@ export default async function Home() {
           </ol>
         </section>
 
-        <section className="panel">
+        <section className="panel" id="approval-queue">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Automation</p>
