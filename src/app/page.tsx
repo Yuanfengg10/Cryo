@@ -28,27 +28,32 @@ export default async function Home() {
     {
       key: "end_user",
       title: "Direct buyers",
-      description: "Main end-user sales opportunities that fit the core outreach pipeline."
+      description: "Main end-user sales opportunities that fit the core outreach pipeline.",
+      nextAction: "Recommended next action: start outreach and move qualified names into the approval queue."
     },
     {
       key: "competitor_customer",
       title: "Upgrade watchlist",
-      description: "Possible current users of similar equipment who may be ready for upgrade or expansion."
+      description: "Possible current users of similar equipment who may be ready for upgrade or expansion.",
+      nextAction: "Recommended next action: approach as a replacement or expansion conversation with proof-led messaging."
     },
     {
       key: "distributor",
       title: "Distributor opportunities",
-      description: "Partner-style leads that may need management approval before deeper sharing."
+      description: "Partner-style leads that may need management approval before deeper sharing.",
+      nextAction: "Recommended next action: review internally first and only share deeper materials after management approval."
     },
     {
       key: "reseller_platform",
       title: "Platform opportunities",
-      description: "Listing sites and reseller platforms for exposure, supplier onboarding, or marketplace cooperation."
+      description: "Listing sites and reseller platforms for exposure, supplier onboarding, or marketplace cooperation.",
+      nextAction: "Recommended next action: ask about listing requirements, onboarding process, and cooperation terms."
     },
     {
       key: "monitor_only_competitor",
       title: "Monitor-only competitors",
-      description: "Visible for market intelligence only. Do not treat them like normal commercial leads."
+      description: "Visible for market intelligence only. Do not treat them like normal commercial leads.",
+      nextAction: "Recommended next action: monitor publicly, capture evidence, and do not share sensitive documents."
     }
   ] as const;
   const hasLeads = activeLeads.length > 0;
@@ -225,6 +230,7 @@ export default async function Home() {
                   <div>
                     <h3>{lane.title}</h3>
                     <p className="muted">{lane.description}</p>
+                    <p className="muted">{lane.nextAction}</p>
                   </div>
                   <span className="panel-kicker">{laneCandidates.length}</span>
                 </div>
