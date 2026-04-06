@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { ArrowUpRight, Clock3, MessageSquare } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
-import { RevertLeadButton } from "@/components/forms/revert-lead-button";
-import { getLastTouchLabel, getWhatsappHref } from "@/lib/mock-data";
+import { formatFollowUpLabel } from "@/lib/lead-repository";
 import type { Lead } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
 
@@ -11,6 +10,8 @@ type LeadCardProps = {
 };
 
 export function LeadCard({ lead }: LeadCardProps) {
+  const nextStep = getNextStepLabel(lead);
+
   return (
     <article className="lead-card">
       <div className="lead-card-header">
@@ -23,44 +24,61 @@ export function LeadCard({ lead }: LeadCardProps) {
         <StatusPill status={lead.status} />
       </div>
 
-      <p className="lead-message-preview">{lead.generatedMessage}</p>
-
       <dl className="lead-meta-grid">
         <div>
-          <dt>Last touch</dt>
-          <dd>{getLastTouchLabel(lead.lastContactedAt ?? lead.firstContactedAt)}</dd>
+          <dt>Contact</dt>
+          <dd>{lead.contactName ?? "No named contact yet"}</dd>
         </div>
         <div>
-          <dt>Best send</dt>
-          <dd>{lead.sendWindow}</dd>
+          <dt>Phone</dt>
+          <dd>{lead.phone}</dd>
         </div>
         <div>
-          <dt>Projected commission</dt>
-          <dd>EUR {lead.projectedCommission.toLocaleString()}</dd>
+          <dt>Follow-up</dt>
+          <dd>{formatFollowUpLabel(lead.followUpDueAt)}</dd>
         </div>
         <div>
-          <dt>Confidence</dt>
-          <dd>{Math.round(lead.probability * 100)}%</dd>
+          <dt>Next step</dt>
+          <dd>{nextStep}</dd>
         </div>
       </dl>
 
       <p className="lead-notes">{lead.notes}</p>
 
       <div className="lead-actions">
-        <a className="button button-primary" href={getWhatsappHref(lead.phone, lead.generatedMessage)} target="_blank" rel="noreferrer">
-          <MessageSquare size={16} />
-          Open WhatsApp
-        </a>
-        <Link className="button button-secondary" href={`/leads/${lead.id}`}>
-          <Clock3 size={16} />
-          Log reply
-        </Link>
-        <Link className="button button-secondary" href={`/leads/${lead.id}`}>
+        <Link className="button button-primary" href={`/leads/${lead.id}`}>
           <ArrowUpRight size={16} />
-          View lead
+          Open lead
         </Link>
-        {lead.status === "contacted" ? <RevertLeadButton leadId={lead.id} /> : null}
       </div>
     </article>
   );
+}
+
+function getNextStepLabel(lead: Lead) {
+  if (lead.status === "ready_to_close") {
+    return "Take over personally";
+  }
+
+  if (lead.status === "new") {
+    return "Review the first message";
+  }
+
+  if (lead.status === "followup_due") {
+    return "Review the next follow-up";
+  }
+
+  if (lead.status === "warm") {
+    return "Keep the conversation moving";
+  }
+
+  if (lead.status === "contacted") {
+    return "Wait for reply or next follow-up";
+  }
+
+  if (lead.status === "closed") {
+    return "Closed";
+  }
+
+  return "No action needed";
 }
